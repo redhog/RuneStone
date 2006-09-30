@@ -1,5 +1,15 @@
 #include <RuneStone/Struct.h>
 
+#define STR(s) Dirt_Struct_str(session, s, sizeof(s) - 1)
+#define str(s) Dirt_Struct_str(session, s, strlen(s))
+#define blob(s, l) Dirt_Struct_str(session, s, l)
+#define keyval(k, v) Dirt_Struct_keyvalue(session, k, v)
+#define strct() Dirt_Struct_structure(session)
+#define append(st, item) Dirt_Struct_structure_add(session, st, item)
+#define type(st) Dirt_Struct_structure_finalize_type(session, st)
+#define list(st) Dirt_Struct_structure_finalize_list(session, st)
+#define dict(st) Dirt_Struct_structure_finalize_dictionary(session, st)
+
 /* To test how some data *should* be serialized, check using the
  * following Python-code:
  *
@@ -29,33 +39,23 @@ void RuneStone_Struct_Class_free(Dirt_Session *session, Dirt_Struct *item)
 Dirt_Struct *RuneStone_Struct_Class_restrict(Dirt_Session *session, Dirt_Struct *item)
  {
   RuneStone_Struct_ClassStruct *strct = (RuneStone_Struct_ClassStruct *) item;
-  Dirt_Struct *res, *lst, *pth;
+  Dirt_Struct *lst, *pth;
   size_t i, j, k;
 
-  res = Dirt_Struct_structure_add(session,
-				  Dirt_Struct_structure(session),
-				  Dirt_Struct_str(session, "Type", sizeof("Type") - 1));
-
-  lst = Dirt_Struct_structure(session);
+  lst = strct();
   for (i = 0; i < strct->paths; i++)
    {
-    pth = Dirt_Struct_structure(session);
+    pth = strct();
     for (j=k=0; strct->path[i][j]; j = ++k)
      {
       for (; strct->path[i][k] && strct->path[i][k] != '.'; k++);
-      pth = Dirt_Struct_structure_add(session,
-				      pth,
-				      Dirt_Struct_str(session, strct->path[i] + j, k - j));
+      pth = append(pth, blob(strct->path[i] + j, k - j));
      }
-    lst = Dirt_Struct_structure_add(session,
-				    lst,
-				    Dirt_Struct_structure_finalize_list(session, pth));
+    lst = append(lst, list(pth));
    }
-  res = Dirt_Struct_structure_add(session,
-				  res,
-				  Dirt_Struct_structure_finalize_list(session, lst));
-
-  return Dirt_Struct_structure_finalize_type(session, res);
+  return type(append(append(strct(),
+			    STR("Type")),
+		     list(lst)));
  }
 
 void RuneStone_Struct_Instance_free(Dirt_Session *session, Dirt_Struct *item)
@@ -77,21 +77,19 @@ void RuneStone_Struct_Instance_free(Dirt_Session *session, Dirt_Struct *item)
  }
 
 /* class X(object): pass
-   x = X()
-   x.foo = 1
-   ==> <'Object', (<'Type', [['__builtin__', 'object'],
-                             ['__main__', 'X']]>,
-                   {'foo': 1})>
-   class X(dict): pass
-   x = X({"bar":2})
-   x.foo = 1
-   ==> <'Object', (<'Type', [['__builtin__', 'object'],
-                             ['__builtin__', 'dict'],
-                             ['__main__', 'X']]>,
-                   ([{'bar': 2}],
-                    {'foo': 1}))>
->
-
+ * x = X()
+ * x.foo = 1
+ * ==> <'Object', (<'Type', [['__builtin__', 'object'],
+ *                           ['__main__', 'X']]>,
+ *                 {'foo': 1})>
+ * class X(dict): pass
+ * x = X({"bar":2})
+ * x.foo = 1
+ * ==> <'Object', (<'Type', [['__builtin__', 'object'],
+ *                           ['__builtin__', 'dict'],
+ *                           ['__main__', 'X']]>,
+ *                 ([{'bar': 2}],
+ *                  {'foo': 1}))>
  */
 Dirt_Struct *RuneStone_Struct_Instance_restrict(Dirt_Session *session, Dirt_Struct *item)
  {
@@ -100,36 +98,26 @@ Dirt_Struct *RuneStone_Struct_Instance_restrict(Dirt_Session *session, Dirt_Stru
   Dirt_Struct *members;
   size_t i;
 
-  baseValues = Dirt_Struct_structure(session);
+  baseValues = strct();
   for (i = 0; i < strct->baseValues; i++)
-   baseValues = Dirt_Struct_structure_add(session, baseValues,
-					  strct->baseValue[i]->type->restrict(session, strct->baseValue[i]));
-  baseValues = Dirt_Struct_structure_finalize_list(baseValues);
-  members = Dirt_Struct_structure(session);
+   baseValues = append(baseValues,
+		       strct->baseValue[i]->type->restrict(session, strct->baseValue[i]));
+  baseValues = list(baseValues);
+  members = strct();
   for (i = 0; i < strct->members; i++)
-   members = Dirt_Struct_structure_add(session, members,
-				       Dirt_Struct_keyvalue(session,
-							    Dirt_Struct_str(session, strct->name[i], strlen(strct->name[i])),
-							    strct->value[i]->type->restrict(session, strct->value[i])));
-  members = Dirt_Struct_structure_finalize_dictionary(members);
+   members = append(members,
+		    keyval(str(strct->name[i]),
+			   strct->value[i]->type->restrict(session, strct->value[i])));
+  members = dict(members);
 
   /* <'Object', (class, (baseValues, members))> */
-  return Dirt_Struct_structure_finalize_type(session,
-   Dirt_Struct_structure_add(session,
-    Dirt_Struct_structure_add(session,
-     Dirt_Struct_structure(session),
-     Dirt_Struct_str(session, "Object", sizeof("Object") - 1)),
-    Dirt_Struct_structure_finalize_list(
-     Dirt_Struct_structure_add(session,
-      Dirt_Struct_structure_add(session,
-       Dirt_Struct_structure(session),
-       strct->class->type->restrict(session, strct->class)),
-      Dirt_Struct_structure_finalize_list(
-       Dirt_Struct_structure_add(session,
-        Dirt_Struct_structure_add(session,
-         Dirt_Struct_structure(session),
-	 baseValues),
-        members))))))	 
+  return type(append(append(strct(),
+			    STR("Object")),
+		     list(append(append(strct(),
+					strct->class->type->restrict(session, strct->class)),
+				 list(append(append(strct(),
+						    baseValues),
+					     members))))));
  }
 
 void RuneStone_Struct_AnnotatedType_free(Dirt_Session *session, Dirt_Struct *item)
@@ -147,17 +135,14 @@ Dirt_Struct *RuneStone_Struct_AnnotatedType_restrict(Dirt_Session *session, Dirt
   char *cls = 'Grimoire.Types.AnnotatedValue';
 
   res = RuneStone_Struct_instanceStruct(session,
-   RuneStone_Struct_classStruct(session, &cls, 1),
-   Dirt_Struct_structure_finalize_dictionary(
-    Dirt_Struct_structure_add(session,
-     Dirt_Struct_structure_add(session,
-      Dirt_Struct_structure(session),
-      Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "Value", sizeof("Value") - 1)), strct->value)),
-     Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "Comment", sizeof("Comment") - 1)), strct->comment))),
-   1,
-   NULL,
-   NULL,
-   0);
+					RuneStone_Struct_classStruct(session, &cls, 1),
+					dict(append(append(strct(),
+							   keyval(STR("Value"), strct->value)),
+						    keyval(STR("Comment"), strct->comment))),
+					1,
+					NULL,
+					NULL,
+					0);
   return res->type->restrict(session, res);
  }
 
@@ -182,29 +167,17 @@ void RuneStone_Struct_ParamsType_free(Dirt_Session *session, Dirt_Struct *item)
 Dirt_Struct *RuneStone_Struct_ParamsType_restrict(Dirt_Session *session, Dirt_Struct *item)
  {
 
-"Grimoire.Types.ParamsType"
 
-'argdict', 'arglist', 'convertType', 'parentType', 'required', 'resargstype', 'reskwtype', 'tag'
-
-  Dirt_Struct_structure_add(session,
-   Dirt_Struct_structure_add(session,
-    Dirt_Struct_structure_add(session,
-     Dirt_Struct_structure_add(session,
-      Dirt_Struct_structure_add(session,
-       Dirt_Struct_structure_add(session,
-        Dirt_Struct_structure_add(session,
-	 Dirt_Struct_structure_add(session,
-	  Dirt_Struct_structure_add(session,
-	   Dirt_Struct_structure(session),
-	   Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "tag", sizeof("tag") - 1), )),
-	  Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "reskwtype", sizeof("reskwtype") - 1), )),
-	 Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "resargstype", sizeof("resargstype") - 1)), )),
-	Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "required", sizeof("required") - 1), )),
-       Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "parentType", sizeof("parentType") - 1), )),
-      Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "convertType", sizeof("convertType") - 1), )),
-     Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "arglist", sizeof("arglist") - 1), )),
-    Dirt_Struct_keyvalue(session, Dirt_Struct_str(session, "argdict", sizeof("argdict") - 1), ))
-
+  return append(append(append(append(append(append(append(append(append(strct(),
+									keyval(STR("tag"), )),
+								 keyval(STR("reskwtype"), )),
+							  keyval(STR("resargstype")), )),
+					    keyval(STR("required"), )),
+				     keyval(STR("parentType"), )),
+			      keyval(STR("convertType"), )),
+		       keyval(STR("arglist"), )),
+		keyval(STR("argdict"), ));
+   
 
  }
 
