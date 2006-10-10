@@ -13,7 +13,7 @@ all: libRuneStone.so.$(MAJOR).$(MINOR) test
 %.o: src/%.c
 	$(CC) $(CFLAGS) $(LIBS) -c $< -o $@
 
-libRuneStone.so.$(MAJOR).$(MINOR): Object.o Introspection.o
+libRuneStone.so.$(MAJOR).$(MINOR): Object.o
 	$(CC) $(CFLAGS) $(LIBS) -fPIC -shared -Wl,-soname,libRuneStone.so.0.1 -o $@ $^
 
 libRuneStone.so.$(MAJOR): libRuneStone.so.$(MAJOR).$(MINOR)
