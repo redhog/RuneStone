@@ -1,6 +1,6 @@
 export INSTALLDIR=/usr/local
 
-export CFLAGS:=-g
+export CFLAGS:=-g -Wall -pedantic-errors -std=gnu99
 export LIBS:=
 export CC:=gcc
 
@@ -13,7 +13,7 @@ all: libRuneStone.so.$(MAJOR).$(MINOR) test
 %.o: src/%.c
 	$(CC) $(CFLAGS) $(LIBS) -c $< -o $@
 
-libRuneStone.so.$(MAJOR).$(MINOR): Struct.o
+libRuneStone.so.$(MAJOR).$(MINOR): Object.o
 	$(CC) $(CFLAGS) $(LIBS) -fPIC -shared -Wl,-soname,libRuneStone.so.0.1 -o $@ $^
 
 libRuneStone.so.$(MAJOR): libRuneStone.so.$(MAJOR).$(MINOR)
